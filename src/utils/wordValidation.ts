@@ -13,14 +13,42 @@ interface ValidationRule {
   priority: number;
 }
 
-// Basic validation rules
+// Helper function to check semantic relationships
+async function findSemanticRelationship(word1: string, word2: string): Promise<{
+  type: string;
+  isValid: boolean;
+} | null> {
+  try {
+    const def1 = await getWordDefinition(word1);
+    const def2 = await getWordDefinition(word2);
+    
+    if (!def1 || !def2) return null;
+
+    // Check for synonyms/antonyms (strict validation)
+    for (const meaning1 of def1.meanings) {
+      for (const def of meaning1.definitions) {
+        if (def.synonyms.includes(word2)) {
+          return { type: 'Synonym', isValid: true };
+        }
+        if (def.antonyms.includes(word2)) {
+          return { type: 'Antonym', isValid: true };
+        }
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Error finding semantic relationship:', error);
+    return null;
+  }
+}
+
 const rules: ValidationRule[] = [
   {
+    // Dictionary validation
     priority: 1,
     validate: async (prev: string, current: string) => {
-      // Check if the word exists in dictionary
       const isValid = await checkDictionary(current);
-      
       if (!isValid) {
         return {
           isValid: false,
@@ -31,6 +59,7 @@ const rules: ValidationRule[] = [
     },
   },
   {
+    // No repetition
     priority: 2,
     validate: async (prev: string, current: string) => {
       if (current === prev) {
@@ -43,36 +72,37 @@ const rules: ValidationRule[] = [
     },
   },
   {
+    // Combined letter sharing and semantic validation
     priority: 3,
     validate: async (prev: string, current: string, isTargetWord: boolean) => {
-      // Check for direct semantic relationship
-      const relationship = await findWordRelationship(prev, current);
+      // First check for semantic relationships
+      const semanticRelation = await findSemanticRelationship(prev, current);
       
-      if (relationship) {
+      if (semanticRelation?.isValid) {
         return {
           isValid: true,
-          relationship,
-          creativityScore: 10,
+          relationship: semanticRelation.type,
+          creativityScore: 15, // Higher score for semantic relationships
           isDirectJump: isTargetWord,
         };
       }
 
-      // Fallback to letter sharing if no semantic relationship found
+      // If no semantic relationship, check for letter sharing
       const prevLetters = new Set(prev.split(''));
       const commonLetters = current.split('').filter(letter => prevLetters.has(letter));
       
-      if (commonLetters.length < 2) {
+      if (commonLetters.length >= 4) {
         return {
-          isValid: false,
-          reason: 'Words must share at least 2 letters or have a clear relationship',
+          isValid: true,
+          relationship: `Share letters: ${commonLetters.join(', ')}`,
+          creativityScore: commonLetters.length > 4 ? 10 : 5,
+          isDirectJump: isTargetWord,
         };
       }
 
       return {
-        isValid: true,
-        relationship: `Share letters: ${commonLetters.join(', ')}`,
-        creativityScore: 5,
-        isDirectJump: false,
+        isValid: false,
+        reason: 'Words must either share at least 4 letters or have a semantic relationship',
       };
     },
   },
@@ -104,66 +134,4 @@ export async function validateWordConnection(
   const result = await rules[rules.length - 1].validate(prev, current, isTargetWord);
   validationCache.set(cacheKey, result);
   return result;
-}
-
-// Add semantic relationship checking
-async function findSemanticRelationship(word1: string, word2: string): Promise<string | null> {
-  try {
-    const def1 = await getWordDefinition(word1);
-    const def2 = await getWordDefinition(word2);
-    
-    if (!def1 || !def2) return null;
-
-    // Check for direct synonyms/antonyms
-    for (const meaning1 of def1.meanings) {
-      for (const def of meaning1.definitions) {
-        if (def.synonyms.includes(word2)) {
-          return 'Synonym';
-        }
-        if (def.antonyms.includes(word2)) {
-          return 'Antonym';
-        }
-      }
-    }
-
-    // Check if one word appears in the other's definition
-    const word1InDef2 = def2.meanings.some(meaning =>
-      meaning.definitions.some(def =>
-        def.definition.toLowerCase().includes(word1.toLowerCase())
-      )
-    );
-
-    const word2InDef1 = def1.meanings.some(meaning =>
-      meaning.definitions.some(def =>
-        def.definition.toLowerCase().includes(word2.toLowerCase())
-      )
-    );
-
-    if (word1InDef2 || word2InDef1) {
-      return 'Related by definition';
-    }
-
-    return null;
-  } catch (error) {
-    console.error('Error finding semantic relationship:', error);
-    return null;
-  }
-}
-
-// Update the findWordRelationship function
-export async function findWordRelationship(
-  word1: string,
-  word2: string
-): Promise<string | null> {
-  // First try to find semantic relationship
-  const semanticRelation = await findSemanticRelationship(word1, word2);
-  if (semanticRelation) return semanticRelation;
-
-  // Fallback to letter sharing check
-  const commonLetters = word1.split('').filter(letter => word2.includes(letter));
-  if (commonLetters.length >= 2) {
-    return `Share letters: ${commonLetters.join(', ')}`;
-  }
-
-  return null;
 } 
