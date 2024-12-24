@@ -1,4 +1,9 @@
 import { isValidWord as checkDictionary, getWordDefinition } from '../services/dictionaryService';
+import { WordEmbeddingService } from '../services/wordEmbeddingService';
+import { findConceptualRelationship } from '../services/conceptNetService';
+import { validateCreativeConnection } from '../services/gptValidationService';
+
+const wordEmbeddingService = new WordEmbeddingService();
 
 export interface ValidationResult {
   isValid: boolean;
@@ -14,33 +19,42 @@ interface ValidationRule {
 }
 
 // Helper function to check semantic relationships
-async function findSemanticRelationship(word1: string, word2: string): Promise<{
-  type: string;
-  isValid: boolean;
-} | null> {
-  try {
-    const def1 = await getWordDefinition(word1);
-    const def2 = await getWordDefinition(word2);
-    
-    if (!def1 || !def2) return null;
+async function findSemanticRelationship(word1: string, word2: string) {
+  // 1. Try dictionary-based synonyms/antonyms first
+  const dictResult = await checkDictionaryRelations(word1, word2);
+  if (dictResult) return dictResult;
 
-    // Check for synonyms/antonyms (strict validation)
-    for (const meaning1 of def1.meanings) {
-      for (const def of meaning1.definitions) {
-        if (def.synonyms.includes(word2)) {
-          return { type: 'Synonym', isValid: true };
-        }
-        if (def.antonyms.includes(word2)) {
-          return { type: 'Antonym', isValid: true };
-        }
-      }
-    }
-
-    return null;
-  } catch (error) {
-    console.error('Error finding semantic relationship:', error);
-    return null;
+  // 2. Check word embeddings similarity
+  const similarity = await wordEmbeddingService.getWordSimilarity(word1, word2);
+  if (similarity > 0.6) {
+    return {
+      type: 'Semantic',
+      isValid: true,
+      creativity: Math.floor(similarity * 15)
+    };
   }
+
+  // 3. Check ConceptNet for conceptual relationships
+  const conceptualRelation = await findConceptualRelationship(word1, word2);
+  if (conceptualRelation?.isValid) {
+    return {
+      type: conceptualRelation.type,
+      isValid: true,
+      creativity: Math.floor(conceptualRelation.strength * 15)
+    };
+  }
+
+  // 4. Fallback to GPT for creative relationships
+  const creativeRelation = await validateCreativeConnection(word1, word2);
+  if (creativeRelation.isValid) {
+    return {
+      type: creativeRelation.relationship || 'Creative',
+      isValid: true,
+      creativity: creativeRelation.creativity || 15
+    };
+  }
+
+  return null;
 }
 
 const rules: ValidationRule[] = [
@@ -81,8 +95,8 @@ const rules: ValidationRule[] = [
       if (semanticRelation?.isValid) {
         return {
           isValid: true,
-          relationship: semanticRelation.type,
-          creativityScore: 15, // Higher score for semantic relationships
+          relationship: `${semanticRelation.type} relationship`,
+          creativityScore: semanticRelation.creativity || 15,
           isDirectJump: isTargetWord,
         };
       }
@@ -102,7 +116,7 @@ const rules: ValidationRule[] = [
 
       return {
         isValid: false,
-        reason: 'Words must either share at least 4 letters or have a semantic relationship',
+        reason: 'Words must either share at least 4 letters or have a valid relationship',
       };
     },
   },
