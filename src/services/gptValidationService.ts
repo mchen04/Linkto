@@ -1,95 +1,73 @@
 import OpenAI from 'openai';
 
-// Initialize OpenAI with environment variable
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: import.meta.env.VITE_OPENAI_API_KEY,
+  dangerouslyAllowBrowser: true
 });
 
-// Cache for embeddings
-const embeddingCache = new Map<string, number[]>();
+export interface GptRelationships {
+  strict: {
+    synonyms: string[];
+    antonyms: string[];
+    contextual: string[];
+  };
+  creative: {
+    figurative: string[];
+    associations: string[];
+  };
+}
 
-// Rate limiting setup
-const RATE_LIMIT = {
-  maxRequests: 3000, // text-embedding-3-small limit
-  windowMs: 60000, // 1 minute
-  requests: new Map<string, number>(),
-};
-
-// Threshold for considering words related
-const SIMILARITY_THRESHOLD = 0.6;
-
-export async function validateCreativeConnection(
-  word1: string,
-  word2: string
-): Promise<{ isValid: boolean; relationship?: string; creativity?: number }> {
-  // Check rate limit
-  const key = `${word1}-${word2}`;
-  const now = Date.now();
-  const recentRequests = RATE_LIMIT.requests.get(key) || 0;
-  
-  if (recentRequests >= RATE_LIMIT.maxRequests) {
-    console.warn('Rate limit exceeded for embeddings');
-    return { isValid: false };
-  }
-
+export const validateWithGpt = async (word: string): Promise<GptRelationships> => {
   try {
-    // Get embeddings for both words
-    const [embedding1, embedding2] = await Promise.all([
-      getEmbedding(word1),
-      getEmbedding(word2)
-    ]);
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        {
+          role: "system",
+          content: "You are a linguistic expert. Respond only in JSON format with arrays of strings for each category."
+        },
+        {
+          role: "user",
+          content: `Analyze the word "${word}" and provide relationships in the following JSON structure:
+{
+  "strict": {
+    "synonyms": [],
+    "antonyms": [],
+    "contextual": []
+  },
+  "creative": {
+    "figurative": [],
+    "associations": []
+  }
+}
+Keep responses concise with 3-5 items per category.`
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: 300,
+      response_format: { type: "json_object" }
+    });
 
-    // Calculate cosine similarity
-    const similarity = cosineSimilarity(embedding1, embedding2);
-
-    // Determine relationship type and creativity score based on similarity
-    if (similarity >= SIMILARITY_THRESHOLD) {
-      const creativity = Math.floor(similarity * 20); // Scale to 1-20
-      let relationship = 'Semantic';
-      
-      if (similarity > 0.8) {
-        relationship = 'Strong semantic';
-      } else if (similarity > 0.7) {
-        relationship = 'Metaphorical';
-      } else {
-        relationship = 'Contextual';
-      }
-
-      return {
-        isValid: true,
-        relationship,
-        creativity,
-      };
+    const response = completion.choices[0]?.message?.content;
+    if (!response) {
+      throw new Error('No response from GPT');
     }
 
-    return { isValid: false };
+    return JSON.parse(response) as GptRelationships;
+
   } catch (error) {
-    console.error('Embedding API error:', error);
-    return { isValid: false };
+    console.error('GPT validation error:', error);
+    // Return empty arrays if there's an error
+    return {
+      strict: {
+        synonyms: [],
+        antonyms: [],
+        contextual: []
+      },
+      creative: {
+        figurative: [],
+        associations: []
+      }
+    };
   }
-}
-
-async function getEmbedding(word: string): Promise<number[]> {
-  // Check cache first
-  if (embeddingCache.has(word)) {
-    return embeddingCache.get(word)!;
-  }
-
-  const response = await openai.embeddings.create({
-    model: "text-embedding-3-small",
-    input: word,
-    dimensions: 384, // Smaller dimension for efficiency
-  });
-
-  const embedding = response.data[0].embedding;
-  embeddingCache.set(word, embedding);
-  
-  return embedding;
-}
-
-function cosineSimilarity(vec1: number[], vec2: number[]): number {
-  const dotProduct = vec1.reduce((acc, val, i) => acc + val * vec2[i], 0);
-  const norm1 = Math.sqrt(vec1.reduce((acc, val) => acc + val * val, 0));
-  const norm2 = Math.sqrt(vec2.reduce((acc, val) => acc + val * val, 0));
-  return dotProduct / (norm1 * norm2);
-} 
+}; 
