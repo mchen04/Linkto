@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-amber-50;
+  }
+}
+
+.puzzle-card {
+  background-color: #fff9e6;
+  box-shadow: 4px 4px 0 #2c1810;
+  border: 2px solid #2c1810;
+}
