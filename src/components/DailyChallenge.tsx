@@ -1,7 +1,5 @@
-import React from 'react';
 import { BookOpen, Flame, Calendar } from 'lucide-react';
 import { ChainBuilder } from './ChainBuilder';
-import { useGame } from '../context/GameContext';
 
 const MOCK_CHALLENGE = {
   id: '2024-03-14',
@@ -12,8 +10,6 @@ const MOCK_CHALLENGE = {
 };
 
 export function DailyChallenge() {
-  const { state } = useGame();
-
   return (
     <div className="min-h-screen bg-amber-50">
       <div className="max-w-4xl mx-auto px-4 py-8">
@@ -47,6 +43,7 @@ export function DailyChallenge() {
           <ChainBuilder
             startWord={MOCK_CHALLENGE.startWord}
             endWord={MOCK_CHALLENGE.endWord}
+            minSteps={MOCK_CHALLENGE.minSteps}
           />
         </div>
 

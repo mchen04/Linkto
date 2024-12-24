@@ -1,16 +1,10 @@
-import React from 'react';
-
 interface WordRelationshipProps {
   previousWord: string;
   currentWord: string;
   relationship?: string;
 }
 
-export function WordRelationship({ 
-  previousWord, 
-  currentWord, 
-  relationship 
-}: WordRelationshipProps) {
+export function WordRelationship({ previousWord, currentWord, relationship }: WordRelationshipProps) {
   if (!relationship) return null;
 
   return (

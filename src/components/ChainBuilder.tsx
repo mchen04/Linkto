@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowRight, Sparkles, HelpCircle, Loader2 } from 'lucide-react';
+import { ArrowRight, Sparkles, Loader2 } from 'lucide-react';
 import { useGame } from '../context/GameContext';
 import { validateWordConnection } from '../utils/wordValidation';
 import { calculateScore } from '../utils/scoring';
@@ -21,7 +21,7 @@ export function ChainBuilder({
   const { state, dispatch } = useGame();
   const [currentWord, setCurrentWord] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [relationships, setRelationships] = useState<Record<string, string>>({});
+  const [relationships, setRelationships] = useState<Record<string, string | undefined>>({});
   const [creativityScores, setCreativityScores] = useState<Record<string, number>>({});
   const [isDirectJump, setIsDirectJump] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
@@ -46,7 +46,7 @@ export function ChainBuilder({
       const validation = await validateWordConnection(
         previousWord, 
         trimmedWord,
-        isAttemptedFinalWord
+        state.currentChain
       );
 
       if (validation.isValid) {
@@ -59,11 +59,13 @@ export function ChainBuilder({
           }));
         }
 
-        if (validation.creativityScore) {
-          setCreativityScores(prev => ({
-            ...prev,
-            [`${previousWord}-${trimmedWord}`]: validation.creativityScore,
-          }));
+        if (validation.creativity) {
+          const newScore = validation.creativity;
+          setCreativityScores(prev => {
+            const updated = { ...prev };
+            updated[`${previousWord}-${trimmedWord}`] = newScore;
+            return updated;
+          });
         }
 
         if (validation.isDirectJump) {

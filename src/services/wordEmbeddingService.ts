@@ -2,7 +2,6 @@ import { load } from '@tensorflow-models/universal-sentence-encoder';
 
 export class WordEmbeddingService {
   private model: any = null;
-  private readonly similarityThreshold = 0.6;
 
   async initialize() {
     this.model = await load();

@@ -1,5 +1,3 @@
-import { ScoreDetails } from '../utils/scoring';
-
 export interface GameState {
   currentChain: string[];
   isComplete: boolean;
@@ -18,4 +16,24 @@ export interface GameAction {
 export interface GameContextType {
   state: GameState;
   dispatch: React.Dispatch<GameAction>;
+}
+
+export interface ScoreDetails {
+  baseScore: number;
+  efficiencyPoints: number;
+  creativityPoints: number;
+  jumpBonus: number;
+  stepPenalty: number;
+  guessPenalty: number;
+  streakBonus: number;
+  totalScore: number;
+}
+
+export interface GameStats {
+  startTime: number;
+  endTime: number;
+  chainLength: number;
+  minSteps: number;
+  creativityScores: number[];
+  attempts: number;
 } 
