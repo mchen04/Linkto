@@ -5,69 +5,55 @@ const openai = new OpenAI({
   dangerouslyAllowBrowser: true
 });
 
-export interface GptRelationships {
-  strict: {
-    synonyms: string[];
-    antonyms: string[];
-    contextual: string[];
-  };
-  creative: {
-    figurative: string[];
-    associations: string[];
-  };
+export interface WordConnectionValidation {
+  isValid: boolean;
+  relationshipType?: 'synonym' | 'antonym' | 'contextual' | 'figurative' | 'creative';
+  creativity?: number;
 }
 
-export const validateWithGpt = async (word: string): Promise<GptRelationships> => {
+export const validateWithGpt = async (word1: string, word2: string): Promise<WordConnectionValidation> => {
   try {
     const completion = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
       messages: [
         {
           role: "system",
-          content: "You are a linguistic expert. Respond only in JSON format with arrays of strings for each category."
+          content: "You are a linguistic expert. Analyze word relationships and respond in JSON format."
         },
         {
           role: "user",
-          content: `Analyze the word "${word}" and provide relationships in the following JSON structure:
-{
-  "strict": {
-    "synonyms": [],
-    "antonyms": [],
-    "contextual": []
-  },
-  "creative": {
-    "figurative": [],
-    "associations": []
-  }
-}
-Keep responses concise with 3-5 items per category.`
+          content: `Analyze the relationship between "${word1}" and "${word2}". 
+          Determine if there's a valid connection and categorize it.
+          Creativity scores:
+          - Synonym: 5
+          - Antonym: 7
+          - Contextual: 10
+          - Figurative: 15
+          - Creative: 20
+          
+          Respond only with:
+          {
+            "isValid": boolean,
+            "relationshipType": "synonym|antonym|contextual|figurative|creative",
+            "creativity": number
+          }`
         }
       ],
-      temperature: 0.7,
-      max_tokens: 300,
+      temperature: 0.5,
+      max_tokens: 100,
       response_format: { type: "json_object" }
     });
 
-    const response = completion.choices[0]?.message?.content;
-    if (!response) {
-      throw new Error('No response from GPT');
-    }
-
-    return JSON.parse(response) as GptRelationships;
-
+    const response = JSON.parse(completion.choices[0]?.message?.content || "{}");
+    return {
+      isValid: response.isValid,
+      relationshipType: response.relationshipType,
+      creativity: response.creativity
+    };
   } catch (error) {
     console.error('GPT validation error:', error);
-    // Return empty arrays if there's an error
     return {
-      strict: {
-        synonyms: [],
-        antonyms: [],
-        contextual: []
-      },
-      creative: {
-        figurative: [],
-        associations: []
-      }
+      isValid: false
     };
   }
 }; 
